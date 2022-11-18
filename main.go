@@ -14,14 +14,20 @@ type Users struct {
 	Balance uint64 `json:"balance"`
 	Reserve uint64 `json:"reserve"`
 }
+type Orders struct {
+	Id         uint64 `json:"id"`
+	Id_user    uint64 `json:"idUser"`
+	Id_service uint64 `json:"idService"`
+	Cost       uint64 `json:"cost"`
+}
 
-func add_money(w http.ResponseWriter, r *http.Request) {
+func addMoney(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	var params map[string]string
 	decoder.Decode(&params)
 
-	id_user := params["id"]
+	idUser := params["id"]
 	money := params["money"]
 
 	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:8889)/Billing")
@@ -29,8 +35,8 @@ func add_money(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 	}
 	defer db.Close()
-	if id_user != "" {
-		update, err := db.Query(fmt.Sprintf("UPDATE `Users` SET `balance`= `balance` + %s WHERE `id`=%s", money, id_user))
+	if idUser != "" {
+		update, err := db.Query(fmt.Sprintf("UPDATE `Users` SET `balance`= `balance` + %s WHERE `id`=%s", money, idUser))
 		if err != nil {
 			panic(err)
 		}
@@ -43,27 +49,29 @@ func add_money(w http.ResponseWriter, r *http.Request) {
 		defer insert.Close()
 	}
 }
-func reserve_money(w http.ResponseWriter, r *http.Request) {
+func reserveMoney(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
 	var params map[string]string
 	decoder.Decode(&params)
 
-	id_user := params["id_user"]
-	id_service := params["id_service"]
-	id_order := params["id_order"]
+	idUser := params["id_user"]
+	idService := params["id_service"]
+	idOrder := params["id_order"]
 	cost := params["cost"]
+
 	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:8889)/Billing")
 	if err != nil {
 		panic(err)
 	}
 	defer db.Close()
 
-	us, err := db.Query(fmt.Sprintf("SELECT * FROM `Users` WHERE `id`=%s", id_user))
+	us, err := db.Query(fmt.Sprintf("SELECT * FROM `Users` WHERE `id`=%s", idUser))
 	if err != nil {
 		panic(err)
 	}
 	defer us.Close()
+
 	var user Users
 	for us.Next() {
 		err = us.Scan(&user.Id, &user.Balance, &user.Reserve)
@@ -71,6 +79,7 @@ func reserve_money(w http.ResponseWriter, r *http.Request) {
 			panic(err)
 		}
 	}
+
 	b, err := strconv.ParseUint(cost, 10, 64)
 	if err != nil {
 		panic(err)
@@ -80,12 +89,13 @@ func reserve_money(w http.ResponseWriter, r *http.Request) {
 		panic(err)
 		return
 	}
-	stmt1, err := db.Query(fmt.Sprintf("UPDATE `Users` SET `balance`=`balance` - %s,`reserve`= `reserve` + %s WHERE `id`=%s", cost, cost, id_user))
+	stmt1, err := db.Query(fmt.Sprintf("UPDATE `Users` SET `balance`=`balance` - %s,`reserve`= `reserve` + %s WHERE `id`=%s", cost, cost, idUser))
 	if err != nil {
 		panic(err)
 	}
 	stmt1.Close()
-	stmt, err := db.Query(fmt.Sprintf("INSERT INTO `Orders` (`id`,`id_user`,`id_service`,`cost`) VALUES (%s,%s,%s,%s)", id_order, id_user, id_service, cost))
+
+	stmt, err := db.Query(fmt.Sprintf("INSERT INTO `Orders` (`id`,`id_user`,`id_service`,`cost`) VALUES (%s,%s,%s,%s)", idOrder, idUser, idService, cost))
 	if err != nil {
 		panic(err)
 	}
@@ -93,11 +103,58 @@ func reserve_money(w http.ResponseWriter, r *http.Request) {
 
 }
 func profit(w http.ResponseWriter, r *http.Request) {
-	id_user := r.FormValue("id")
-	id_service := r.FormValue("id_service")
-	id_order := r.FormValue("id_order")
-	cost := r.FormValue("cost")
-	fmt.Print(id_user, id_service, id_order, cost)
+
+	decoder := json.NewDecoder(r.Body)
+	var params map[string]string
+	decoder.Decode(&params)
+
+	idUser := params["id_user"]
+	idService := params["id_service"]
+	idOrder := params["id_order"]
+	cost := params["cost"]
+
+	db, err := sql.Open("mysql", "root:root@tcp(127.0.0.1:8889)/Billing")
+	if err != nil {
+		panic(err)
+	}
+	defer db.Close()
+
+	stmt, err := db.Query(fmt.Sprintf("SELECT * FROM `Users` WHERE `id`=%s", idUser))
+	if err != nil {
+		panic(err)
+	}
+	stmt.Close()
+
+	var user Users
+	for stmt.Next() {
+		err = stmt.Scan(&user.Id, &user.Balance, &user.Reserve)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	reserve := user.Reserve
+
+	stmt1, err := db.Query(fmt.Sprintf("SELECT * FROM `Orders` WHERE `id`=%s AND `id_user`=%s AND `id_service`=%s AND`cost`=%s", idOrder, idUser, idService, cost))
+	if err != nil {
+		panic(err)
+	}
+	stmt1.Close()
+
+	var order Orders
+	for stmt1.Next() {
+		err := stmt1.Scan(&order.Id, &order.Id_user, &order.Id_service, &order.Cost)
+		if err != nil {
+			panic(err)
+		}
+	}
+
+	reserve = reserve - order.Cost
+	stmt2, err := db.Query(fmt.Sprintf("UPDATE `Users` SET `reserve` = %d WHERE `id`= %s", reserve, idUser))
+	if err != nil {
+		panic(err)
+	}
+	stmt2.Close()
 }
 func getBalance(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
@@ -128,8 +185,8 @@ func getBalance(w http.ResponseWriter, r *http.Request) {
 	w.Write(answ)
 }
 func handleFunc() {
-	http.HandleFunc("/add", add_money)
-	http.HandleFunc("/reserve", reserve_money)
+	http.HandleFunc("/add", addMoney)
+	http.HandleFunc("/reserve", reserveMoney)
 	http.HandleFunc("/profit", profit)
 	http.HandleFunc("/getBalanceOfUser", getBalance)
 	http.ListenAndServe(":8080", nil)
