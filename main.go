@@ -2,12 +2,10 @@ package main
 
 import (
 	"database/sql"
-	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
 	"net/http"
-	"os"
 	"strconv"
 )
 
@@ -158,24 +156,6 @@ func profit(w http.ResponseWriter, r *http.Request) {
 	}
 	stmt2.Close()
 
-	report, err := os.Create("./Report.csv")
-	if err != nil {
-		panic(err)
-	}
-
-	writer := csv.NewWriter(report)
-	var data = [][]string{
-		{"Name", "Age", "Occupation"},
-		{"Sally", "22", "Nurse"},
-		{"Joe", "43", "Sportsman"},
-		{"Louis", "39", "Author"},
-	}
-
-	err = writer.WriteAll(data)
-
-	if err != nil {
-		panic(err)
-	}
 }
 func getBalance(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
