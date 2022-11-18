@@ -42,20 +42,16 @@ func readCSVFile(filePath string) (reports []Report) {
 		if err == io.EOF {
 			break
 		}
-		// Handle first row case
 		if isFirstRow {
 			isFirstRow = false
 
-			// Add mapping: Column/property name --> record index
 			for i, v := range record {
 				headerMap[v] = i
 			}
 
-			// Skip next code
 			continue
 		}
 
-		// Create new person and add to persons array
 		reports = append(reports, Report{
 			Date:      record[headerMap["Date"]],
 			IdUser:    record[headerMap["IdUser"]],
@@ -67,17 +63,14 @@ func readCSVFile(filePath string) (reports []Report) {
 	return
 }
 func writeCSVFile(reports []Report, outputPath string) {
-	// Define header row
 	headerRow := []string{
 		"Date", "IdUser", "IdOrder", "IdService", "Profit",
 	}
 
-	// Data array to write to CSV
 	data := [][]string{
 		headerRow,
 	}
 
-	// Add persons to output data
 	for _, report := range reports {
 		data = append(data, []string{
 			report.Date,
@@ -88,15 +81,12 @@ func writeCSVFile(reports []Report, outputPath string) {
 		})
 	}
 
-	// Create file
 	file, _ := os.Create(outputPath)
 	defer file.Close()
 
-	// Create writer
 	writer := csv.NewWriter(file)
 	defer writer.Flush()
 
-	// Write rows into file
 	for _, value := range data {
 		writer.Write(value)
 	}
