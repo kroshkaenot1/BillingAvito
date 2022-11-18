@@ -2,13 +2,24 @@ package main
 
 import (
 	"database/sql"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	_ "github.com/go-sql-driver/mysql"
+	"io"
 	"net/http"
+	"os"
 	"strconv"
+	"time"
 )
 
+type Report struct {
+	Date      string `json:"date"`
+	IdUser    string `json:"id_user"`
+	IdOrder   string `json:"id_order"`
+	IdService string `json:"id_service"`
+	Profit    string `json:"profit"`
+}
 type Users struct {
 	Id      uint64 `json:"id"`
 	Balance uint64 `json:"balance"`
@@ -21,6 +32,75 @@ type Orders struct {
 	Cost       uint64 `json:"cost"`
 }
 
+func readCSVFile(filePath string) (reports []Report) {
+	isFirstRow := true
+	headerMap := make(map[string]int)
+	f, _ := os.Open(filePath)
+	r := csv.NewReader(f)
+	for {
+		record, err := r.Read()
+		if err == io.EOF {
+			break
+		}
+		// Handle first row case
+		if isFirstRow {
+			isFirstRow = false
+
+			// Add mapping: Column/property name --> record index
+			for i, v := range record {
+				headerMap[v] = i
+			}
+
+			// Skip next code
+			continue
+		}
+
+		// Create new person and add to persons array
+		reports = append(reports, Report{
+			Date:      record[headerMap["Date"]],
+			IdUser:    record[headerMap["IdUser"]],
+			IdOrder:   record[headerMap["IdOrder"]],
+			IdService: record[headerMap["IdService"]],
+			Profit:    record[headerMap["Profit"]],
+		})
+	}
+	return
+}
+func writeCSVFile(reports []Report, outputPath string) {
+	// Define header row
+	headerRow := []string{
+		"Date", "IdUser", "IdOrder", "IdService", "Profit",
+	}
+
+	// Data array to write to CSV
+	data := [][]string{
+		headerRow,
+	}
+
+	// Add persons to output data
+	for _, report := range reports {
+		data = append(data, []string{
+			report.Date,
+			report.IdUser,
+			report.IdOrder,
+			report.IdService,
+			report.Profit,
+		})
+	}
+
+	// Create file
+	file, _ := os.Create(outputPath)
+	defer file.Close()
+
+	// Create writer
+	writer := csv.NewWriter(file)
+	defer writer.Flush()
+
+	// Write rows into file
+	for _, value := range data {
+		writer.Write(value)
+	}
+}
 func addMoney(w http.ResponseWriter, r *http.Request) {
 
 	decoder := json.NewDecoder(r.Body)
@@ -156,6 +236,15 @@ func profit(w http.ResponseWriter, r *http.Request) {
 	}
 	stmt2.Close()
 
+	reports := readCSVFile("./Report.csv")
+	var modifiedReports []Report
+	for _, report := range reports {
+		modifiedReports = append(modifiedReports, report)
+	}
+	report := Report{time.Now().Format("2006-01-02"), idUser, idOrder, idService, cost}
+	modifiedReports = append(modifiedReports, report)
+
+	writeCSVFile(modifiedReports, "./Report.csv")
 }
 func getBalance(w http.ResponseWriter, r *http.Request) {
 	decoder := json.NewDecoder(r.Body)
